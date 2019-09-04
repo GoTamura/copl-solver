@@ -1,0 +1,7 @@
+[package]
+name = "copl-solver"
+version = "0.1.0"
+authors = ["Go Tamura <1655078t@stu.kobe-u.ac.jp>"]
+edition = "2018"
+
+[dependencies]
