@@ -126,6 +126,7 @@ pub enum ParseError {
     UnclosedOpenParen(Token),
     UnclosedIfThenElse(Token),
     RedundantExpression(Token),
+    TypeError,
     Eof,
 }
 
@@ -170,44 +171,24 @@ where
     }
     Ok(e)
 }
-
 //
 // EXPR = EXPR5
 //
 //EXPR5 = EXPR4 | EXPR_B2
 //
-// EXPR4 = if EXPR_B2 then EXPR4 else EXPR4 | EXPR3
-// EXPR3 = EXPR3, ("+" | "-"), EXPR2 | EXPR2
-// EXPR2 = EXPR2, "*", EXPR1 | EXPR1
-// EXPR1 = ("+" | "-"), ATOM | ATOM
-// ATOM = UNUMBER | "(", EXPR4, ")"
-// UNUMBER = DIGIT, {DIGIT}
-// DIGIT = "0" | ... | "9"
-//
-// EXPR_B2 = if EXPR_B2 then EXPR_B2 else EXPR_B2 | EXPR_B
-// EXPR_B = EXPR4 < EXPR4 | BOOL | "(", EXPR_B2, ")"
-// BOOL = "true" | "false"
-//
-//
-
-//
-// EXPR = EXPR5
-//
-//EXPR5 = EXPR4 | EXPR_B2
-//
-// EXPR4 = if EXPR_B2 then EXPR4 else EXPR4 | EXPR3
-// EXPR3 = EXPR2, EXPR3_Loop
+// EXPR4 = if EXPR4(bool) then EXPR4 else EXPR4 | EXPR3
+// EXPR_B = EXPR4, "<", EXPR4
+// EXPR_B_Loop = EXPR4, "<", EXPR4
+// EXPR3 = EXPR2, EXPR3_Loop(num)
 // EXPR3_Loop = ("+" | "-"), EXPR2, EXPR3_Loop | e
-// EXPR2 = EXPR1, EXPR2_Loop
+// EXPR2 = EXPR1, EXPR2_Loop(num)
 // EXPR2_Loop = "*", EXPR1 , EXPR2_Loop | e
-// EXPR1 = ("+" | "-"), ATOM | ATOM
-// ATOM = UNUMBER | "(", EXPR4, ")"
+// EXPR1 = ("+" | "-"), ATOM(num) | ATOM
+// ATOM = BOOL | UNUMBER | "(", EXPR4, ")"
 // UNUMBER = DIGIT, {DIGIT}
 // DIGIT = "0" | ... | "9"
-//
-// EXPR_B2 = if EXPR_B2 then EXPR_B2 else EXPR_B2 | EXPR_B
-// EXPR_B = EXPR4, "<", EXPR4 | BOOL | "(", EXPR_B2, ")"
 // BOOL = "true" | "false"
+//
 //
 
 fn parse_bool<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<Ast, ParseError>
@@ -230,7 +211,16 @@ where
     match tokens.peek().map(|tok| tok.value.clone()) {
         Some(TokenKind::If) => {
             let op = tokens.next();
-            let condition = parse_bool(tokens)?;
+            let condition = parse_expr4(tokens)?;
+            //match condition.value {
+            //    AstKind::Bool { .. } => {}
+            //    AstKind::BinOp { ref op, .. } => {
+            //        if op.value != BinOpKind::Less {
+            //            return Err(ParseError::TypeError);
+            //        }
+            //    }
+            //    _ => return Err(ParseError::TypeError),
+            //};
             match tokens.next() {
                 Some(Token {
                     value: TokenKind::Then,
@@ -342,6 +332,7 @@ where
         .ok_or(ParseError::Eof)
         .and_then(|tok| match tok.value {
             TokenKind::Number(n) => Ok(Ast::num(n, tok.loc)),
+            TokenKind::Bool(n) => Ok(Ast::bool_(n, tok.loc)),
             TokenKind::LParen => {
                 let e = parse_expr4(tokens)?;
                 match tokens.next() {
