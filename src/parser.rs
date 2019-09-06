@@ -176,9 +176,8 @@ where
 //
 //EXPR5 = EXPR4 | EXPR_B2
 //
-// EXPR4 = if EXPR4(bool) then EXPR4 else EXPR4 | EXPR3
-// EXPR_B = EXPR4, "<", EXPR4
-// EXPR_B_Loop = EXPR4, "<", EXPR4
+// EXPR4 = if EXPR4(bool) then EXPR4 else EXPR4 | EXPR_B
+// EXPR_B = EXPR3, "<", EXPR3 | EXPR3
 // EXPR3 = EXPR2, EXPR3_Loop(num)
 // EXPR3_Loop = ("+" | "-"), EXPR2, EXPR3_Loop | e
 // EXPR2 = EXPR1, EXPR2_Loop(num)
@@ -191,19 +190,6 @@ where
 //
 //
 
-fn parse_bool<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<Ast, ParseError>
-where
-    Tokens: Iterator<Item = Token>,
-{
-    tokens
-        .next()
-        .ok_or(ParseError::Eof)
-        .and_then(|tok| match tok.value {
-            TokenKind::Bool(n) => Ok(Ast::bool_(n, tok.loc)),
-            _ => Err(ParseError::NotExpression(tok)),
-        })
-}
-
 fn parse_expr4<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<Ast, ParseError>
 where
     Tokens: Iterator<Item = Token>,
@@ -212,15 +198,6 @@ where
         Some(TokenKind::If) => {
             let op = tokens.next();
             let condition = parse_expr4(tokens)?;
-            //match condition.value {
-            //    AstKind::Bool { .. } => {}
-            //    AstKind::BinOp { ref op, .. } => {
-            //        if op.value != BinOpKind::Less {
-            //            return Err(ParseError::TypeError);
-            //        }
-            //    }
-            //    _ => return Err(ParseError::TypeError),
-            //};
             match tokens.next() {
                 Some(Token {
                     value: TokenKind::Then,
@@ -250,7 +227,24 @@ where
                 tok => Err(ParseError::UnclosedIfThenElse(tok.unwrap())),
             }
         }
-        _ => parse_expr3(tokens),
+        _ => parse_expr_b(tokens),
+    }
+}
+
+fn parse_expr_b<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<Ast, ParseError>
+where
+    Tokens: Iterator<Item = Token>,
+{
+    let e = parse_expr3(tokens)?;
+    match tokens.peek().map(|tok| &tok.value) {
+        Some(TokenKind::Less) => {
+            let op = BinOp::less(tokens.next().unwrap().loc);
+            let r = parse_expr3(tokens)?;
+            let loc = e.loc.merge(&r.loc);
+            Ok(Ast::binop(op, e, r, loc))
+        }
+        Some(_) => Ok(e),
+        None => Ok(e),
     }
 }
 
@@ -387,43 +381,4 @@ where
         }
         _ => parse_expr_b(tokens),
     }
-}
-
-fn parse_expr_b<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<Ast, ParseError>
-where
-    Tokens: Iterator<Item = Token>,
-{
-    fn parse_expr4_op<Tokens>(tokens: &mut std::iter::Peekable<Tokens>) -> Result<BinOp, ParseError>
-    where
-        Tokens: Iterator<Item = Token>,
-    {
-        let op = tokens
-            .peek()
-            .ok_or(ParseError::Eof)
-            .and_then(|tok| match tok.value {
-                TokenKind::Less => Ok(BinOp::less(tok.loc.clone())),
-                _ => Err(ParseError::NotOperator(tok.clone())),
-            })?;
-        tokens.next();
-        Ok(op)
-    }
-
-    tokens
-        .next()
-        .ok_or(ParseError::Eof)
-        .and_then(|tok| match tok.value {
-            TokenKind::Bool(b) => Ok(Ast::bool_(b, tok.loc)),
-            TokenKind::LParen => {
-                let e = parse_expr_b(tokens)?;
-                match tokens.next() {
-                    Some(Token {
-                        value: TokenKind::RParen,
-                        ..
-                    }) => Ok(e),
-                    Some(t) => Err(ParseError::RedundantExpression(t)),
-                    _ => Err(ParseError::UnclosedOpenParen(tok)),
-                }
-            }
-            _ => parse_left_binop(tokens, parse_expr4, parse_expr4_op),
-        })
 }
