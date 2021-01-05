@@ -174,8 +174,6 @@ where
 //
 // EXPR = EXPR5
 //
-//EXPR5 = EXPR4 | EXPR_B2
-//
 // EXPR4 = if EXPR4(bool) then EXPR4 else EXPR4 | EXPR_B
 // EXPR_B = EXPR3, "<", EXPR3 | EXPR3
 // EXPR3 = EXPR2, EXPR3_Loop(num)
@@ -338,7 +336,8 @@ where
                     _ => Err(ParseError::UnclosedOpenParen(tok)),
                 }
             }
-            _ => Err(ParseError::NotExpression(tok)),
+            //_ => Err(ParseError::NotExpression(tok)),
+            _ => parse_expr4(tokens),
         })
 }
 
